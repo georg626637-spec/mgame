@@ -14,68 +14,82 @@ public class ChatTest {
         System.out.println("Type messages (or 'quit' to exit)\n");
 
         Scanner sc = new Scanner(System.in);
-        while (true) {
-            System.out.print("> ");
-            String msg = sc.nextLine();
-            if (msg.equals("quit")) break;
+        try {
+            while (true) {
+                System.out.print("> ");
+                if (!sc.hasNextLine()) break;
+                String msg = sc.nextLine();
+                if (msg.equals("quit")) break;
 
-            String body = "{\"model\":\"" + MODEL + "\",\"messages\":[" +
-                "{\"role\":\"system\",\"content\":\"" + escape(SYSTEM) + "\"}," +
-                "{\"role\":\"user\",\"content\":\"" + escape(msg) + "\"}]," +
-                "\"stream\":false}";
+                String body = "{\"model\":\"" + MODEL + "\",\"messages\":[" +
+                    "{\"role\":\"system\",\"content\":\"" + escape(SYSTEM) + "\"}," +
+                    "{\"role\":\"user\",\"content\":\"" + escape(msg) + "\"}]," +
+                    "\"stream\":false}";
 
-            System.out.println("--- Request ---");
-            System.out.println(body);
-            System.out.println("--- Response ---");
+                System.out.println("--- Request ---");
+                System.out.println(body);
+                System.out.println("--- Response ---");
 
-            try {
-                URL url = new URL(endpoint);
-                HttpURLConnection c = (HttpURLConnection) url.openConnection();
-                c.setRequestMethod("POST");
-                c.setRequestProperty("Content-Type", "application/json");
-                c.setDoOutput(true);
-                c.setConnectTimeout(5000);
-                c.setReadTimeout(60000);
+                try {
+                    URL url = new URL(endpoint);
+                    HttpURLConnection c = (HttpURLConnection) url.openConnection();
+                    c.setRequestMethod("POST");
+                    c.setRequestProperty("Content-Type", "application/json");
+                    c.setDoOutput(true);
+                    c.setConnectTimeout(5000);
+                    c.setReadTimeout(60000);
 
-                OutputStream os = c.getOutputStream();
-                os.write(body.getBytes(StandardCharsets.UTF_8));
-                os.flush();
+                    try (OutputStream os = c.getOutputStream()) {
+                        os.write(body.getBytes(StandardCharsets.UTF_8));
+                        os.flush();
+                    }
 
-                int status = c.getResponseCode();
-                System.out.println("HTTP " + status);
+                    int status = c.getResponseCode();
+                    System.out.println("HTTP " + status);
 
-                BufferedReader r;
-                if (status == 200) {
-                    r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
-                } else {
-                    r = new BufferedReader(new InputStreamReader(c.getErrorStream(), StandardCharsets.UTF_8));
+                    BufferedReader r;
+                    if (status == 200) {
+                        r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
+                    } else {
+                        r = new BufferedReader(new InputStreamReader(c.getErrorStream(), StandardCharsets.UTF_8));
+                    }
+
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    try (BufferedReader br = r) {
+                        while ((line = br.readLine()) != null) sb.append(line);
+                    }
+
+                    String raw = sb.toString();
+                    System.out.println(raw);
+
+                    if (status == 200) {
+                        System.out.println("\n--- Parsed ---");
+                        System.out.println(parseContent(raw));
+                    }
+                    c.disconnect();
+                } catch (Exception e) {
+                    System.out.println("ERROR: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                    e.printStackTrace();
                 }
-
-                StringBuilder sb = new StringBuilder();
-                String line; while ((line = r.readLine()) != null) sb.append(line);
-                r.close();
-
-                String raw = sb.toString();
-                System.out.println(raw);
-
-                if (status == 200) {
-                    System.out.println("\n--- Parsed ---");
-                    System.out.println(parseContent(raw));
-                }
-            } catch (Exception e) {
-                System.out.println("ERROR: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                System.out.println();
             }
-            System.out.println();
+        } finally {
+            sc.close();
         }
-        sc.close();
     }
 
     static String escape(String s) {
-        return s.replace("\\", "\\\\").replace("\"", "\\\"")
-                .replace("\n", "\\n").replace("\r", "\\r");
+        if (s == null) return "";
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     static String parseContent(String json) {
+        if (json == null || json.isEmpty()) return "NOT FOUND";
         int idx = json.indexOf("\"content\"");
         if (idx < 0) return "NOT FOUND";
         idx = json.indexOf(':', idx + 9);
@@ -91,6 +105,7 @@ public class ChatTest {
                 if (n == 'n') out.append('\n');
                 else if (n == '"') out.append('"');
                 else if (n == '\\') out.append('\\');
+                else if (n == 't') out.append('\t');
                 else out.append(ch).append(n);
             } else if (ch == '"') break;
             else out.append(ch);
