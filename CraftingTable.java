@@ -31,7 +31,7 @@ public class CraftingTable extends JFrame {
         addRecipe(new int[]{3,3,3,0, 3,3,3,0, 3,3,3,0, 0,0,0,0}, 3, 9);
         addRecipe(new int[]{4,4,4,0, 4,4,4,0, 4,4,4,0, 0,0,0,0}, 4, 9);
         addRecipe(new int[]{8,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0}, 8, 3);
-        addRecipe(new int[]{4,14,0,0, 4,14,0,0, 0,0,0,0, 0,0,0,0}, 10, 1);
+        addRecipe(new int[]{14,0,0,0, 15,0,0,0, 15,0,0,0, 15,0,0,0}, 10, 1);
         addRecipe(new int[]{9,3,0,0, 9,3,0,0, 0,0,0,0, 0,0,0,0}, 11, 1);
         addRecipe(new int[]{3,3,3,0, 3,0,3,0, 3,3,3,0, 0,0,0,0}, 13, 1);
         addRecipe(new int[]{12,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0}, 15, 2);

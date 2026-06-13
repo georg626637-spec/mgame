@@ -253,7 +253,7 @@ public class Renderer {
         glBindVertexArray(0);
     }
 
-    public void render(World world, Player player, Camera camera, EntityManager entities, ChatSystem chat, BlockRegistry reg, boolean selectorOpen, long seed, java.util.Map<Integer, float[]> otherPlayers, int selfId, boolean serverIsHost, Config cfg) {
+    public void render(World world, Player player, Camera camera, EntityManager entities, ChatSystem chat, BlockRegistry reg, boolean selectorOpen, long seed, java.util.Map<Integer, float[]> otherPlayers, int selfId, boolean serverIsHost, Config cfg, PortableCraft portableCraft) {
         double fwdX = camera.forwardX(), fwdY = camera.forwardY(), fwdZ = camera.forwardZ();
         double rightX = camera.rightX(), rightZ = camera.rightZ();
         double upX = camera.upX(), upY = camera.upY(), upZ = camera.upZ();
@@ -281,7 +281,7 @@ public class Renderer {
         glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-        updateOverlay(world, player, camera, entities, chat, reg, selectorOpen, seed, otherPlayers, selfId, serverIsHost);
+        updateOverlay(world, player, camera, entities, chat, reg, selectorOpen, seed, otherPlayers, selfId, serverIsHost, portableCraft);
         glUseProgram(displayProg);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -295,7 +295,7 @@ public class Renderer {
         glUseProgram(0);
     }
 
-    public void updateOverlay(World world, Player player, Camera camera, EntityManager entities, ChatSystem chat, BlockRegistry reg, boolean selectorOpen, long seed, java.util.Map<Integer, float[]> otherPlayers, int selfId, boolean serverIsHost) {
+    public void updateOverlay(World world, Player player, Camera camera, EntityManager entities, ChatSystem chat, BlockRegistry reg, boolean selectorOpen, long seed, java.util.Map<Integer, float[]> otherPlayers, int selfId, boolean serverIsHost, PortableCraft portableCraft) {
         BufferedImage bi = new BufferedImage(winW, winH, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = bi.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -338,7 +338,7 @@ public class Renderer {
                 g.drawString(tex.name.substring(0, Math.min(4, tex.name.length())), sx + 2, barY + slotSize + 12);
             }
             craftBtnBounds = null;
-            GuiSystem.drawPortableCraft(g, winW, winH, player.inventory, reg, player.selectedBlock);
+            portableCraft.draw(g, winW, winH, player.inventory, reg, player.selectedBlock);
         } else {
             craftBtnBounds = null;
         }

@@ -21,6 +21,7 @@ public class Game {
     EntityManager entities = new EntityManager();
     Renderer renderer = new Renderer();
     InputHandler input = new InputHandler();
+    PortableCraft portableCraft = new PortableCraft();
 
     double lastMouseX, lastMouseY;
     int[] craftBtnBounds;
@@ -126,7 +127,7 @@ public class Game {
                 for (java.util.Map.Entry<Integer, float[]> e : server.getPlayerPositions().entrySet())
                     allPlayers.putIfAbsent(e.getKey(), e.getValue());
             renderer.render(world, player, camera, entities, chat, reg, input.selectorOpen, seed,
-            allPlayers.isEmpty() ? null : allPlayers, client != null ? client.myId : -1, server != null, cfg);
+            allPlayers.isEmpty() ? null : allPlayers, client != null ? client.myId : -1, server != null, cfg, portableCraft);
             craftBtnBounds = renderer.craftBtnBounds;
             glfwSwapBuffers(window);
             glfwPollEvents();

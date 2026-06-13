@@ -60,12 +60,14 @@ public class InputHandler {
             } else {
                 game.lastMouseX = xpos;
                 game.lastMouseY = ypos;
+                GuiSystem.mouseX = (int)xpos;
+                GuiSystem.mouseY = (int)ypos;
             }
         });
         glfwSetMouseButtonCallback(window, (w, button, act, mods) -> {
             if (act == GLFW_PRESS && !game.chat.isActive()) {
                 if (GuiSystem.isOpen()) {
-                    GuiSystem.handleClick((int)game.lastMouseX, (int)game.lastMouseY);
+                    GuiSystem.handleClick((int)game.lastMouseX, (int)game.lastMouseY, game.player.selectedBlock);
                     return;
                 }
                 if (selectorOpen) {
@@ -78,20 +80,23 @@ public class InputHandler {
                         if (mx >= sx && mx <= sx + slotSize && my >= barY && my <= barY + slotSize) {
                             game.player.selectedBlock = i;
                             selectorOpen = false;
+                            grabMouse(window);
+                            game.onRightClick();
                             return;
                         }
                     }
                     // Check portable craft slots
-                    for (int[] b : GuiSystem.clickBounds) {
+                    for (int[] b : game.portableCraft.clickBounds) {
                         if (b[4] == 50 && mx >= b[0] && mx <= b[0] + b[2] && my >= b[1] && my <= b[1] + b[3]) {
-                            GuiSystem.handlePortableCraftSlotClick(b[5], game.player.selectedBlock);
+                            game.portableCraft.handleClick(b[5], game.player.selectedBlock, game.player.inventory);
                             return;
                         }
                         if (b[4] == 51 && mx >= b[0] && mx <= b[0] + b[2] && my >= b[1] && my <= b[1] + b[3]) {
-                            GuiSystem.handlePortableCraftSlotClick(2, game.player.selectedBlock);
+                            game.portableCraft.handleClick(2, game.player.selectedBlock, game.player.inventory);
                             return;
                         }
                     }
+                    grabMouse(window);
                     return;
                 }
                 if (!mouseGrabbed && button == GLFW_MOUSE_BUTTON_LEFT) grabMouse(window);

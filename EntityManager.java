@@ -103,7 +103,7 @@ public class EntityManager {
                 GuiSystem.fillChest(cx, y + 1, cz, new int[]{
                     12,12,12,12,12,12,12,12,12,
                     4,4,4, 3,3,3, 8,8,8, 9,9,9,
-                    15,15,15, 7,7,7
+                    15,15,15, 14,14,14
                 });
                 break;
             }
