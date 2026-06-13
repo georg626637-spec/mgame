@@ -94,4 +94,29 @@ public class EntityManager {
             }
         }
     }
+
+    public void placeChest(World world) {
+        int cx = 7, cz = 11;
+        for (int y = World.WY - 1; y >= 0; y--) {
+            if (world.get(cx, y, cz) != 0) {
+                if (y + 1 < World.WY) world.set(cx, y + 1, cz, (byte)16);
+                GuiSystem.fillChest(cx, y + 1, cz, new int[]{
+                    12,12,12,12,12,12,12,12,12,
+                    4,4,4, 3,3,3, 8,8,8, 9,9,9,
+                    15,15,15, 7,7,7
+                });
+                break;
+            }
+        }
+    }
+
+    public void placeCraftingTable(World world) {
+        int cx = 6, cz = 11;
+        for (int y = World.WY - 1; y >= 0; y--) {
+            if (world.get(cx, y, cz) != 0) {
+                if (y + 1 < World.WY) world.set(cx, y + 1, cz, (byte)17);
+                break;
+            }
+        }
+    }
 }

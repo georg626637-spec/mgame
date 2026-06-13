@@ -31,16 +31,17 @@ public class CraftingTable extends JFrame {
         addRecipe(new int[]{3,3,3,0, 3,3,3,0, 3,3,3,0, 0,0,0,0}, 3, 9);
         addRecipe(new int[]{4,4,4,0, 4,4,4,0, 4,4,4,0, 0,0,0,0}, 4, 9);
         addRecipe(new int[]{8,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0}, 8, 3);
-        addRecipe(new int[]{4,3,0,0, 4,3,0,0, 0,0,0,0, 0,0,0,0}, 10, 1);
+        addRecipe(new int[]{4,14,0,0, 4,14,0,0, 0,0,0,0, 0,0,0,0}, 10, 1);
         addRecipe(new int[]{9,3,0,0, 9,3,0,0, 0,0,0,0, 0,0,0,0}, 11, 1);
         addRecipe(new int[]{3,3,3,0, 3,0,3,0, 3,3,3,0, 0,0,0,0}, 13, 1);
-        addRecipe(new int[]{4,3,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0}, 14, 2);
         addRecipe(new int[]{12,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0}, 15, 2);
     }
 
     public static void addRecipe(int[] pattern, int resultType, int resultCount) {
         recipes.add(new int[][]{pattern, new int[]{resultType, resultCount}});
     }
+
+    public static java.util.List<int[][]> getRecipes() { return recipes; }
 
     public CraftingTable(int[] inventory, int[] blockColors, String[] blockNames, int blockCount) {
         super("Crafting Table 4x4");

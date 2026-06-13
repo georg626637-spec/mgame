@@ -10,6 +10,7 @@ public class InputHandler {
         this.game = game;
         glfwSetKeyCallback(window, (w, key, sc, act, mods) -> {
             if (act == GLFW_RELEASE && key == GLFW_KEY_ESCAPE) {
+                if (GuiSystem.isOpen()) { GuiSystem.close(); return; }
                 if (game.chat.isActive()) { game.chat.toggle(); return; }
                 if (selectorOpen) { selectorOpen = false; return; }
                 if (mouseGrabbed) { releaseMouse(window); return; }
@@ -28,6 +29,7 @@ public class InputHandler {
                 }
             }
             if (act == GLFW_PRESS && key == GLFW_KEY_E && !game.chat.isActive()) {
+                if (GuiSystem.isOpen()) { GuiSystem.close(); return; }
                 selectorOpen = !selectorOpen;
                 if (selectorOpen && mouseGrabbed) releaseMouse(window);
                 return;
@@ -62,6 +64,10 @@ public class InputHandler {
         });
         glfwSetMouseButtonCallback(window, (w, button, act, mods) -> {
             if (act == GLFW_PRESS && !game.chat.isActive()) {
+                if (GuiSystem.isOpen()) {
+                    GuiSystem.handleClick((int)game.lastMouseX, (int)game.lastMouseY);
+                    return;
+                }
                 if (selectorOpen) {
                     int n = game.reg.size();
                     int slotSize = 36, gap = 6, startX = game.winW / 2 - (n * (slotSize + gap)) / 2;
@@ -75,11 +81,16 @@ public class InputHandler {
                             return;
                         }
                     }
-                    if (game.craftBtnBounds != null && mx >= game.craftBtnBounds[0] && mx <= game.craftBtnBounds[0] + game.craftBtnBounds[2] &&
-                        my >= game.craftBtnBounds[1] && my <= game.craftBtnBounds[1] + game.craftBtnBounds[3]) {
-                        selectorOpen = false;
-                        game.openCraftingTable();
-                        return;
+                    // Check portable craft slots
+                    for (int[] b : GuiSystem.clickBounds) {
+                        if (b[4] == 50 && mx >= b[0] && mx <= b[0] + b[2] && my >= b[1] && my <= b[1] + b[3]) {
+                            GuiSystem.handlePortableCraftSlotClick(b[5], game.player.selectedBlock);
+                            return;
+                        }
+                        if (b[4] == 51 && mx >= b[0] && mx <= b[0] + b[2] && my >= b[1] && my <= b[1] + b[3]) {
+                            GuiSystem.handlePortableCraftSlotClick(2, game.player.selectedBlock);
+                            return;
+                        }
                     }
                     return;
                 }

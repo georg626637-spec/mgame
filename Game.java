@@ -11,6 +11,8 @@ public class Game {
     long window;
     int winW, winH;
 
+    Config cfg = new Config();
+
     ChatSystem chat = new ChatSystem();
     Camera camera = new Camera();
     BlockRegistry reg = new BlockRegistry();
@@ -34,12 +36,26 @@ public class Game {
         glViewport(0, 0, winW, winH);
         renderer.setWindowSize(winW, winH);
 
+        System.err.println("[GL] OpenGL " + glGetString(GL_VERSION) + " | GLSL " + glGetString(org.lwjgl.opengl.GL20.GL_SHADING_LANGUAGE_VERSION) + " | Vendor " + glGetString(GL_VENDOR) + " | Renderer " + glGetString(GL_RENDERER));
+
+        try {
+            renderer.setupShaders();
+        } catch (Exception e) {
+            System.err.println("[FATAL] Shader setup failed: " + e.getMessage());
+            e.printStackTrace();
+            glfwDestroyWindow(window);
+            glfwTerminate();
+            System.exit(1);
+        }
+
         world.generate(seed);
         world.upload();
 
         entities.spawnNPCs(world, rng);
         entities.placeSaw(world);
         entities.placeFurnace(world);
+        entities.placeChest(world);
+        entities.placeCraftingTable(world);
 
         reg.initDefaults();
         world.reg = reg;
@@ -89,7 +105,6 @@ public class Game {
             addMessage("Seed: " + seed);
         });
 
-        renderer.setupShaders();
         renderer.setupBuffers(reg, world);
 
         modCtx = new ModContext(this);
@@ -104,8 +119,14 @@ public class Game {
             lastFrame = now;
 
             update(dt);
+            java.util.Map<Integer, float[]> allPlayers = new java.util.HashMap<>();
+            if (client != null && client.otherPlayers != null)
+                allPlayers.putAll(client.otherPlayers);
+            if (server != null)
+                for (java.util.Map.Entry<Integer, float[]> e : server.getPlayerPositions().entrySet())
+                    allPlayers.putIfAbsent(e.getKey(), e.getValue());
             renderer.render(world, player, camera, entities, chat, reg, input.selectorOpen, seed,
-            client != null ? client.otherPlayers : null, client != null ? client.myId : -1);
+            allPlayers.isEmpty() ? null : allPlayers, client != null ? client.myId : -1, server != null, cfg);
             craftBtnBounds = renderer.craftBtnBounds;
             glfwSwapBuffers(window);
             glfwPollEvents();
@@ -129,11 +150,12 @@ public class Game {
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+        winW = cfg.winW;
+        winH = cfg.winH;
         long monitor = glfwGetPrimaryMonitor();
         GLFWVidMode vidmode = glfwGetVideoMode(monitor);
-        winW = vidmode.width();
-        winH = vidmode.height();
-        window = glfwCreateWindow(winW, winH, "Voxel Engine GPU", 0, NULL);
+        if (cfg.fullscreen) { winW = vidmode.width(); winH = vidmode.height(); }
+        window = glfwCreateWindow(winW, winH, "Voxel Engine GPU", cfg.fullscreen ? monitor : 0, NULL);
         if (window == NULL) throw new RuntimeException("glfwCreateWindow failed");
 
         input.setupCallbacks(this, window);
@@ -189,8 +211,12 @@ public class Game {
             int fx = hit[0], fy = hit[1], fz = hit[2];
             int oldType = world.get(fx, fy, fz) & 0xFF;
             if (oldType > 0) {
-                player.destroyBlock(world, camera.yaw, camera.pitch, entities.itemDrops);
-                sendBlockChange(fx, fy, fz, 0);
+                if (client != null && client.isConnected()) {
+                    sendBlockChange(fx, fy, fz, 0);
+                } else {
+                    player.destroyBlock(world, camera.yaw, camera.pitch, entities.itemDrops);
+                    sendBlockChange(fx, fy, fz, 0);
+                }
             }
         }
     }
@@ -199,13 +225,30 @@ public class Game {
         int type = player.getBlockInSight(world, camera.yaw, camera.pitch);
         if (type == 11) { openSawTable(); return; }
         if (type == 13) { openFurnaceTable(); return; }
+        if (type == 16) {
+            int[] chestHit = player.getHitBlock(world, camera.yaw, camera.pitch);
+            if (chestHit != null) openChest(chestHit[0], chestHit[1], chestHit[2]);
+            return;
+        }
+        if (type == 17) { openCraftingTable(); return; }
         int[] hit = player.getHitBlock(world, camera.yaw, camera.pitch);
         if (hit != null) {
             int fx = hit[0] + (hit[3] == 0 ? 1 : hit[3] == 1 ? -1 : 0);
             int fy = hit[1] + (hit[3] == 2 ? 1 : hit[3] == 3 ? -1 : 0);
             int fz = hit[2] + (hit[3] == 4 ? 1 : hit[3] == 5 ? -1 : 0);
-            if (player.placeBlock(world, camera.yaw, camera.pitch) && world.get(fx, fy, fz) != 0)
+            if (fx < 0 || fx >= World.WX || fy < 0 || fy >= World.WY || fz < 0 || fz >= World.WZ) return;
+            if (world.get(fx, fy, fz) != 0) return;
+            if (!player.isPlaceable(player.selectedBlock)) return;
+            if (player.gameMode == 1 && player.inventory[player.selectedBlock] <= 0) return;
+            double HALF = 0.3, EYE_OFFSET = 2.7;
+            if (fx + 1 > player.px - HALF && fx < player.px + HALF &&
+                fy + 1 > player.py - EYE_OFFSET && fy < player.py + HALF &&
+                fz + 1 > player.pz - HALF && fz < player.pz + HALF) return;
+            if (client != null && client.isConnected()) {
                 sendBlockChange(fx, fy, fz, player.selectedBlock);
+            } else if (player.placeBlock(world, camera.yaw, camera.pitch)) {
+                sendBlockChange(fx, fy, fz, player.selectedBlock);
+            }
         }
     }
 
@@ -269,36 +312,23 @@ public class Game {
     }
 
     void openCraftingTable() {
-        int n = reg.size();
-        int[] colors = new int[n + 1];
-        String[] names = new String[n + 1];
-        for (int i = 1; i <= n; i++) {
-            colors[i] = reg.color(i);
-            names[i] = reg.name(i);
-        }
-        SwingUtilities.invokeLater(() -> new CraftingTable(player.inventory, colors, names, n).setVisible(true));
+        GuiSystem.openCrafting(player.inventory);
+        if (input.mouseGrabbed) input.releaseMouse(window);
     }
 
     private void openSawTable() {
-        int n = reg.size();
-        int[] colors = new int[n + 1];
-        String[] names = new String[n + 1];
-        for (int i = 1; i <= n; i++) {
-            colors[i] = reg.color(i);
-            names[i] = reg.name(i);
-        }
-        SwingUtilities.invokeLater(() -> new SawTable(player.inventory, colors, names, n).setVisible(true));
+        GuiSystem.openSaw(player.inventory);
+        if (input.mouseGrabbed) input.releaseMouse(window);
     }
 
     private void openFurnaceTable() {
-        int n = reg.size();
-        int[] colors = new int[n + 1];
-        String[] names = new String[n + 1];
-        for (int i = 1; i <= n; i++) {
-            colors[i] = reg.color(i);
-            names[i] = reg.name(i);
-        }
-        SwingUtilities.invokeLater(() -> new FurnaceTable(player.inventory, colors, names, n).setVisible(true));
+        GuiSystem.openFurnace(player.inventory);
+        if (input.mouseGrabbed) input.releaseMouse(window);
+    }
+
+    private void openChest(int cx, int cy, int cz) {
+        GuiSystem.openChest(cx, cy, cz, player.inventory, player.selectedBlock);
+        if (input.mouseGrabbed) input.releaseMouse(window);
     }
 
     private void addBlockFromPending(String name) {

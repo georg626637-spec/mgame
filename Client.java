@@ -12,6 +12,7 @@ public class Client {
     public final Map<Integer, float[]> otherPlayers = new ConcurrentHashMap<>();
     public int myId = -1;
     private long lastPosSend = 0;
+    private static final long POS_INTERVAL = 1000;
 
     public boolean connect(String host, int port) {
         try {
@@ -71,7 +72,7 @@ public class Client {
 
     public void sendPosition(float x, float y, float z) {
         long now = System.currentTimeMillis();
-        if (now - lastPosSend < 50) return;
+        if (now - lastPosSend < POS_INTERVAL) return;
         lastPosSend = now;
         if (out != null)
             out.println("P " + x + " " + y + " " + z);

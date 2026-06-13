@@ -11,16 +11,12 @@ import static org.lwjgl.opengl.GL12.*;
 import static org.lwjgl.opengl.GL13.*;
 import static org.lwjgl.opengl.GL20.*;
 import static org.lwjgl.opengl.GL30.*;
-import static org.lwjgl.opengl.GL31.*;
-import static org.lwjgl.opengl.GL42.*;
-import static org.lwjgl.opengl.GL43.*;
 
 public class Renderer {
-    private int computeProg, displayProg, vao, vbo, ebo;
-    private int outputTex, overlayTex;
-    private int uPos, uDir, uRight, uUp, uFov, uSize, uMaxDist;
+    private int worldProg, displayProg, vao, vbo, ebo;
+    private int overlayTex;
+    private int uPos, uDir, uRight, uUp, uFov, uSize, uMaxDist, uWinSize;
     private int winW, winH;
-    private int renderW = 960, renderH = 600;
 
     public void setWindowSize(int w, int h) { winW = w; winH = h; }
 
@@ -45,13 +41,17 @@ public class Renderer {
     public int[] craftBtnBounds;
 
     public void setupShaders() {
-        String computeSrc =
-        "#version 430 core\n" +
-        "layout(local_size_x = 16, local_size_y = 16) in;\n" +
-        "layout(rgba8, binding = 0) uniform image2D outImg;\n" +
-        "layout(binding = 1) uniform usampler3D voxTex;\n" +
-        "layout(binding = 2) uniform sampler2DArray uBlockTex;\n" +
-        "layout(binding = 3) uniform usampler3D shapeTex;\n" +
+        String vsSrc =
+        "#version 330 core\n" +
+        "layout(location = 0) in vec2 pos;\n" +
+        "layout(location = 1) in vec2 tex;\n" +
+        "out vec2 uv;\n" +
+        "void main() { gl_Position = vec4(pos, 0, 1); uv = tex; }";
+
+        String fsWorldSrc =
+        "#version 330 core\n" +
+        "in vec2 uv;\n" +
+        "out vec4 color;\n" +
         "uniform vec3 camPos;\n" +
         "uniform vec3 camDir;\n" +
         "uniform vec3 camRight;\n" +
@@ -59,12 +59,13 @@ public class Renderer {
         "uniform float fovTan;\n" +
         "uniform ivec3 worldSize;\n" +
         "uniform float maxDist;\n" +
+        "uniform ivec2 winSize;\n" +
+        "uniform usampler3D voxTex;\n" +
+        "uniform sampler2DArray uBlockTex;\n" +
+        "uniform usampler3D shapeTex;\n" +
         "void main() {\n" +
-        "  ivec2 p = ivec2(gl_GlobalInvocationID.xy);\n" +
-        "  ivec2 sz = imageSize(outImg);\n" +
-        "  if (p.x >= sz.x || p.y >= sz.y) return;\n" +
-        "  vec2 ndc = (vec2(p) + 0.5) / vec2(sz) * 2.0 - 1.0;\n" +
-        "  float aspect = float(sz.x) / float(sz.y);\n" +
+        "  vec2 ndc = uv * 2.0 - 1.0;\n" +
+        "  float aspect = float(winSize.x) / float(winSize.y);\n" +
         "  vec3 rd = normalize(camDir + camRight * ndc.x * fovTan * aspect + camUp * ndc.y * fovTan);\n" +
         "  vec3 ro = camPos;\n" +
         "  ivec3 mp = ivec3(floor(ro));\n" +
@@ -134,45 +135,20 @@ public class Renderer {
         "    float fog = min(dist / maxDist, 1.0); fog = fog * fog;\n" +
         "    light *= (1.0 - fog);\n" +
         "    vec3 f = fract((ro + rd * dist) - vec3(mp));\n" +
-        "    vec2 uv;\n" +
-        "    if (norm.x > 0) uv = vec2(1.0 - f.z, 1.0 - f.y);\n" +
-        "    else if (norm.x < 0) uv = vec2(f.z, 1.0 - f.y);\n" +
-        "    else if (norm.y > 0) uv = vec2(f.x, 1.0 - f.z);\n" +
-        "    else if (norm.y < 0) uv = vec2(f.x, 1.0 - f.z);\n" +
-        "    else if (norm.z > 0) uv = vec2(1.0 - f.x, 1.0 - f.y);\n" +
-        "    else uv = vec2(f.x, 1.0 - f.y);\n" +
-        "    vec3 texCol = texelFetch(uBlockTex, ivec3(uv * 16.0, type - 1), 0).rgb;\n" +
+        "    vec2 uv2;\n" +
+        "    if (norm.x > 0) uv2 = vec2(1.0 - f.z, 1.0 - f.y);\n" +
+        "    else if (norm.x < 0) uv2 = vec2(f.z, 1.0 - f.y);\n" +
+        "    else if (norm.y > 0) uv2 = vec2(f.x, 1.0 - f.z);\n" +
+        "    else if (norm.y < 0) uv2 = vec2(f.x, 1.0 - f.z);\n" +
+        "    else if (norm.z > 0) uv2 = vec2(1.0 - f.x, 1.0 - f.y);\n" +
+        "    else uv2 = vec2(f.x, 1.0 - f.y);\n" +
+        "    vec3 texCol = texelFetch(uBlockTex, ivec3(uv2 * 16.0, type - 1), 0).rgb;\n" +
         "    col = texCol * light + vec3(0.7, 0.78, 0.9) * fog;\n" +
         "  }\n" +
-        "  imageStore(outImg, p, vec4(col, 1.0));\n" +
+        "  color = vec4(col, 1.0);\n" +
         "}";
 
-        int cs = glCreateShader(GL_COMPUTE_SHADER);
-        glShaderSource(cs, computeSrc);
-        glCompileShader(cs);
-        checkShader(cs, "compute");
-
-        computeProg = glCreateProgram();
-        glAttachShader(computeProg, cs);
-        glLinkProgram(computeProg);
-        checkProgram(computeProg, "compute");
-
-        uPos = glGetUniformLocation(computeProg, "camPos");
-        uDir = glGetUniformLocation(computeProg, "camDir");
-        uRight = glGetUniformLocation(computeProg, "camRight");
-        uUp = glGetUniformLocation(computeProg, "camUp");
-        uFov = glGetUniformLocation(computeProg, "fovTan");
-        uSize = glGetUniformLocation(computeProg, "worldSize");
-        uMaxDist = glGetUniformLocation(computeProg, "maxDist");
-
-        String vsSrc =
-        "#version 330 core\n" +
-        "layout(location = 0) in vec2 pos;\n" +
-        "layout(location = 1) in vec2 tex;\n" +
-        "out vec2 uv;\n" +
-        "void main() { gl_Position = vec4(pos, 0, 1); uv = tex; }";
-
-        String fsSrc =
+        String fsDisplaySrc =
         "#version 330 core\n" +
         "in vec2 uv;\n" +
         "out vec4 color;\n" +
@@ -184,14 +160,34 @@ public class Renderer {
         glCompileShader(vs);
         checkShader(vs, "vertex");
 
-        int fs = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fs, fsSrc);
-        glCompileShader(fs);
-        checkShader(fs, "fragment");
+        int fsWorld = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fsWorld, fsWorldSrc);
+        glCompileShader(fsWorld);
+        checkShader(fsWorld, "world");
+
+        worldProg = glCreateProgram();
+        glAttachShader(worldProg, vs);
+        glAttachShader(worldProg, fsWorld);
+        glLinkProgram(worldProg);
+        checkProgram(worldProg, "world");
+
+        uPos = glGetUniformLocation(worldProg, "camPos");
+        uDir = glGetUniformLocation(worldProg, "camDir");
+        uRight = glGetUniformLocation(worldProg, "camRight");
+        uUp = glGetUniformLocation(worldProg, "camUp");
+        uFov = glGetUniformLocation(worldProg, "fovTan");
+        uSize = glGetUniformLocation(worldProg, "worldSize");
+        uMaxDist = glGetUniformLocation(worldProg, "maxDist");
+        uWinSize = glGetUniformLocation(worldProg, "winSize");
+
+        int fsDisplay = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fsDisplay, fsDisplaySrc);
+        glCompileShader(fsDisplay);
+        checkShader(fsDisplay, "display");
 
         displayProg = glCreateProgram();
         glAttachShader(displayProg, vs);
-        glAttachShader(displayProg, fs);
+        glAttachShader(displayProg, fsDisplay);
         glLinkProgram(displayProg);
         checkProgram(displayProg, "display");
     }
@@ -207,13 +203,6 @@ public class Renderer {
     }
 
     public void setupBuffers(BlockRegistry reg, World world) {
-        outputTex = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, outputTex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, renderW, renderH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
         overlayTex = glGenTextures();
         glBindTexture(GL_TEXTURE_2D, overlayTex);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, winW, winH, 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer)null);
@@ -221,7 +210,6 @@ public class Renderer {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
         ByteBuffer initBuf = BufferUtils.createByteBuffer(winW * winH * 4);
         for (int i = 0; i < winW * winH * 4; i++) initBuf.put((byte)0);
         initBuf.flip();
@@ -265,45 +253,41 @@ public class Renderer {
         glBindVertexArray(0);
     }
 
-    public void render(World world, Player player, Camera camera, EntityManager entities, ChatSystem chat, BlockRegistry reg, boolean selectorOpen, long seed, java.util.Map<Integer, float[]> otherPlayers, int selfId) {
+    public void render(World world, Player player, Camera camera, EntityManager entities, ChatSystem chat, BlockRegistry reg, boolean selectorOpen, long seed, java.util.Map<Integer, float[]> otherPlayers, int selfId, boolean serverIsHost, Config cfg) {
         double fwdX = camera.forwardX(), fwdY = camera.forwardY(), fwdZ = camera.forwardZ();
         double rightX = camera.rightX(), rightZ = camera.rightZ();
         double upX = camera.upX(), upY = camera.upY(), upZ = camera.upZ();
 
-        glUseProgram(computeProg);
+        glUseProgram(worldProg);
         glUniform3f(uPos, (float)player.px, (float)player.py, (float)player.pz);
         glUniform3f(uDir, (float)fwdX, (float)fwdY, (float)fwdZ);
         glUniform3f(uRight, (float)rightX, 0, (float)rightZ);
         glUniform3f(uUp, (float)upX, (float)upY, (float)upZ);
         glUniform1f(uFov, (float)Math.tan(camera.fov / 2));
         glUniform3i(uSize, World.WX, World.WY, World.WZ);
-        glUniform1f(uMaxDist, (float)player.getReach());
+        glUniform1f(uMaxDist, Math.min((float)player.getReach(), cfg.maxDist));
+        glUniform2i(uWinSize, winW, winH);
 
-        glBindImageTexture(0, outputTex, 0, false, 0, GL_WRITE_ONLY, GL_RGBA8);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_3D, world.tex3D);
-        glUniform1i(glGetUniformLocation(computeProg, "voxTex"), 1);
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_2D_ARRAY, reg.texArray);
-        glUniform1i(reg.uBlockTexLoc, 2);
-        glActiveTexture(GL_TEXTURE3);
-        glBindTexture(GL_TEXTURE_3D, reg.shapeTex);
-        glUniform1i(glGetUniformLocation(computeProg, "shapeTex"), 3);
-
-        glDispatchCompute((renderW + 15) / 16, (renderH + 15) / 16, 1);
-        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-        glUseProgram(displayProg);
-        glBindVertexArray(vao);
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, outputTex);
-        glUniform1i(glGetUniformLocation(displayProg, "screenTex"), 0);
+        glBindTexture(GL_TEXTURE_3D, world.tex3D);
+        glUniform1i(glGetUniformLocation(worldProg, "voxTex"), 0);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, reg.texArray);
+        glUniform1i(glGetUniformLocation(worldProg, "uBlockTex"), 1);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_3D, reg.shapeTex);
+        glUniform1i(glGetUniformLocation(worldProg, "shapeTex"), 2);
+
+        glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-        updateOverlay(world, player, camera, entities, chat, reg, selectorOpen, seed, otherPlayers, selfId);
+        updateOverlay(world, player, camera, entities, chat, reg, selectorOpen, seed, otherPlayers, selfId, serverIsHost);
+        glUseProgram(displayProg);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, overlayTex);
+        glUniform1i(glGetUniformLocation(displayProg, "screenTex"), 0);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         glDisable(GL_BLEND);
 
@@ -311,7 +295,7 @@ public class Renderer {
         glUseProgram(0);
     }
 
-    public void updateOverlay(World world, Player player, Camera camera, EntityManager entities, ChatSystem chat, BlockRegistry reg, boolean selectorOpen, long seed, java.util.Map<Integer, float[]> otherPlayers, int selfId) {
+    public void updateOverlay(World world, Player player, Camera camera, EntityManager entities, ChatSystem chat, BlockRegistry reg, boolean selectorOpen, long seed, java.util.Map<Integer, float[]> otherPlayers, int selfId, boolean serverIsHost) {
         BufferedImage bi = new BufferedImage(winW, winH, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = bi.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -353,16 +337,8 @@ public class Renderer {
                 g.setColor(new Color(220, 220, 220));
                 g.drawString(tex.name.substring(0, Math.min(4, tex.name.length())), sx + 2, barY + slotSize + 12);
             }
-            int btnX = startX - 8, btnY = barY + slotSize + 30;
-            int btnW = totalW + 16, btnH = 28;
-            g.setColor(new Color(60, 60, 120, 220));
-            g.fillRect(btnX, btnY, btnW, btnH);
-            g.setColor(new Color(100, 100, 180));
-            g.drawRect(btnX, btnY, btnW, btnH);
-            g.setFont(new Font("Monospaced", Font.BOLD, 13));
-            g.setColor(new Color(200, 200, 255));
-            g.drawString("[ Crafting Table ]", cx - 55, btnY + 19);
-            craftBtnBounds = new int[]{btnX, btnY, btnW, btnH};
+            craftBtnBounds = null;
+            GuiSystem.drawPortableCraft(g, winW, winH, player.inventory, reg, player.selectedBlock);
         } else {
             craftBtnBounds = null;
         }
@@ -413,6 +389,7 @@ public class Renderer {
             if (otherPlayers != null) {
                 for (java.util.Map.Entry<Integer, float[]> e : otherPlayers.entrySet()) {
                     if (e.getKey() == selfId) continue;
+                    if (serverIsHost && e.getKey() == 0) continue;
                     float[] p = e.getValue();
                     double dx = p[0] - player.px, dy = p[1] + 1.0 - player.py, dz = p[2] - player.pz;
                     double fDot = dx * fwdX + dy * fwdY + dz * fwdZ;
@@ -463,6 +440,7 @@ public class Renderer {
                 }
             }
         }
+        GuiSystem.draw(g, winW, winH, reg, player.inventory, player.selectedBlock);
         g.dispose();
 
         int[] pixels = ((DataBufferInt) bi.getRaster().getDataBuffer()).getData();

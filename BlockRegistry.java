@@ -18,10 +18,42 @@ public class BlockRegistry {
     public Map<String, BlockTexture> pendingTextures = new HashMap<>();
 
     public void initDefaults() {
-        int[] colors = {0, 0xFF8B5E3C, 0xFF5A9E4A, 0xFF8A8A8A, 0xFF6B4423, 0xFF2D5A1E, 0xFF3366AA, 0xFFE8D5A0, 0xFF333333, 0xFFCC9966, 0xFFAAAAAA, 0xFF886644, 0xFFC8A96E, 0xFF555555, 0xFFCC8888, 0xFF8B6B3C};
-        String[] names = {"", "Dirt", "Grass", "Stone", "Wood", "Leaves", "Water", "Sand", "Coal", "Iron", "Axe", "Saw", "Planks", "Furnace", "Cheek", "Stick"};
+        int[] colors = {0, 0xFF8B5E3C, 0xFF5A9E4A, 0xFF8A8A8A, 0xFF6B4423, 0xFF2D5A1E, 0xFF3366AA, 0xFFE8D5A0, 0xFF333333, 0xFFCC9966, 0xFFAAAAAA, 0xFF886644, 0xFFC8A96E, 0xFF555555, 0xFFCC8888, 0xFF8B6B3C, 0xFFB8860B};
+        String[] names = {"", "Dirt", "Grass", "Stone", "Wood", "Leaves", "Water", "Sand", "Coal", "Iron", "Axe", "Saw", "Planks", "Furnace", "Cheek", "Stick", "Chest"};
         for (int i = 1; i <= 15; i++)
             textures.add(new BlockTexture(names[i], colors[i]));
+        int[] chestPixels = new int[256];
+        int gold = BlockTexture.rgb(204, 153, 0);
+        int body = BlockTexture.rgb(139, 69, 19);
+        int lockC = BlockTexture.rgb(255, 215, 0);
+        int hole = BlockTexture.rgb(30, 30, 30);
+        for (int y = 0; y < 16; y++) {
+            for (int x = 0; x < 16; x++) {
+                if (y < 2 || y >= 14 || x < 2 || x >= 14) {
+                    chestPixels[y * 16 + x] = gold;
+                } else if (y >= 6 && y <= 8 && x >= 5 && x <= 10) {
+                    chestPixels[y * 16 + x] = (y == 7 && x >= 6 && x <= 9) ? hole : lockC;
+                } else {
+                    chestPixels[y * 16 + x] = body;
+                }
+            }
+        }
+        textures.add(new BlockTexture("Chest", chestPixels));
+        int[] ctPixels = new int[256];
+        int woodC = BlockTexture.rgb(160, 120, 60);
+        int gridC = BlockTexture.rgb(80, 60, 30);
+        for (int y = 0; y < 16; y++) {
+            for (int x = 0; x < 16; x++) {
+                if (x % 4 == 0 || y % 4 == 0) {
+                    ctPixels[y * 16 + x] = gridC;
+                } else if (x == 15 || y == 15) {
+                    ctPixels[y * 16 + x] = gridC;
+                } else {
+                    ctPixels[y * 16 + x] = woodC;
+                }
+            }
+        }
+        textures.add(new BlockTexture("CraftingTable", ctPixels));
         for (int i = 0; i < textures.size(); i++)
             shapes.add(BlockShape.fullBlock());
     }

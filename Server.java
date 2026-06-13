@@ -100,12 +100,20 @@ public class Server {
             pw.println(msg);
     }
 
+    private long lastBroadcast = 0;
+    private static final long BROADCAST_INTERVAL = 1000;
+
     public void broadcastPosition(int id, float x, float y, float z) {
+        long now = System.currentTimeMillis();
+        if (now - lastBroadcast < BROADCAST_INTERVAL) return;
+        lastBroadcast = now;
         playerPositions.put(id, new float[]{x, y, z});
         String msg = "P " + id + " " + x + " " + y + " " + z;
         for (PrintWriter pw : clients.values())
             pw.println(msg);
     }
+
+    public Map<Integer, float[]> getPlayerPositions() { return playerPositions; }
 
     public void stop() {
         running = false;
